@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://sunskybrave.github.io</id>
     <title>Gridea</title>
-    <updated>2020-07-20T14:16:31.412Z</updated>
+    <updated>2020-07-20T14:58:45.577Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://sunskybrave.github.io"/>
     <link rel="self" href="https://sunskybrave.github.io/atom.xml"/>
@@ -17,102 +17,131 @@
         </link>
         <updated>2020-07-18T14:38:25.000Z</updated>
         <content type="html"><![CDATA[<figure data-type="image" tabindex="1"><img src="https://raw.githubusercontent.com/sunskybrave/picbed/master/4.jpg" alt="" loading="lazy"></figure>
-<h1 id="目录">目录</h1>
-<p><a href="#t1">1. redis集群的简要介绍</a><br>
-<a href="#t2">2. redis集群寻址算法</a><br>
-+ <a href="#t2.1">hash算法</a><br>
-+ <a href="#t2.2">一致性hash算法</a><br>
-+ <a href="#t2.3">hash slot算法</a><br>
-<a href="#t2">2. redis集群的工作原理</a><br>
-<a href="#t3">3. redis集群的故障处理</a><br>
-<a href="#t4">4. redis集群下的批量读写方法</a></p>
+<h1 id="️目录">⚽️目录</h1>
+<ol>
+<li><a href="#t1">redis集群的简要介绍</a>：</li>
+<li><a href="#t2">redis集群寻址算法</a>：
+<ul>
+<li><a href="#t2.1">hash算法</a></li>
+<li><a href="#t2.2">一致性hash算法</a></li>
+<li><a href="#t2.3">hash slot算法</a></li>
+</ul>
+</li>
+<li><a href="#t3">redis集群的工作原理</a>
+<ul>
+<li><a href="#t3.1">读写操作</a></li>
+<li><a href="#t3.2">节点之间的通信机制</a></li>
+<li><a href="#t3.3">redisCluster的重定向特性</a></li>
+</ul>
+</li>
+<li><a href="#t4">redis集群下的批量读写方法</a></li>
+</ol>
 <p><span id="t1"></span></p>
-<h1 id="redis集群的简要介绍">redis集群的简要介绍</h1>
-<p>Redis-Cluster采用无中心结构,它的特点如下：</p>
+<h1 id="redis集群的简要介绍">🏀redis集群的简要介绍</h1>
+<p> redis-cluster采用无中心结构,它的特点如下：</p>
 <ol>
 <li>所有的redis节点彼此互联，内部使用gossip 协议优化传输速度和带宽。</li>
 <li>节点的fail是通过集群中超过半数的节点检测失效时才生效。</li>
 <li>客户端与redis节点直连,不需要中间代理层.客户端不需要连接集群所有节点,连接集群中任何一个可用节点即可</li>
 </ol>
 <p><span id="t2"></span></p>
-<h1 id="redis集群寻址算法">redis集群寻址算法</h1>
-<p>在redis集群采用分布式存储的思想，将数据分布在多个master节点下，这就涉及到数据如何进行分布寻址，有以下3种寻址算法：</p>
+<h1 id="redis集群寻址算法">🏐redis集群寻址算法</h1>
+<p> 在redis集群采用分布式存储的思想，将数据分布在多个master节点下，这就涉及到数据如何进行分布寻址，有以下3种寻址算法：</p>
 <ol>
 <li>hash算法</li>
 <li>一致性hash算法</li>
 <li>hash slot算法</li>
 </ol>
 <p><span id="t2.1"></span></p>
-<h2 id="hash算法">hash算法</h2>
-<p>假设当前共有N 个 master，采用下面的通用方法计算 key的 hash 值，然后均匀的映射到 N 个 master上：<br>
-　　hash(key)%N</p>
+<h2 id="hash算法">🍏hash算法</h2>
+<p> 假设当前共有N 个 master，采用下面的通用方法计算 key的 hash 值，然后均匀的映射到 N 个 master上：hash(key)%N</p>
 <ol>
 <li>增加一个master<br>
 公式变成了 hash(key)%(N+1)</li>
 <li>如果一个master宕机了<br>
 公式变成了 hash(key)%(N-1)<br>
-在这两种情况下，大量的缓存都失效了，数据库访问的压力陡增，严重情况，还可能导致数据库宕机。</li>
+在这两种情况下，大量的缓存都失效了(特殊的情况，比如原来是4个节点，假设key值为13，则余数为1，此时有一个节点被移除，则余数仍为1)，数据库访问的压力陡增，严重情况，还可能导致数据库宕机。</li>
 </ol>
 <p><span id="t2.2"></span></p>
-<h2 id="一致性hash算法">一致性hash算法</h2>
+<h2 id="一致性hash算法">🍎一致性hash算法</h2>
 <figure data-type="image" tabindex="2"><img src="https://raw.githubusercontent.com/sunskybrave/picbed/master/6.png" alt="" loading="lazy"></figure>
-<p>一致性 hash 算法将整个 hash 值空间组织成一个虚拟的圆环，整个空间按顺时针方向组织，<br>
-1.将各个 master 节点（使用服务器的 ip 或主机名）进行 hash。这样就能确定每个节点在其哈希环上的位置<br>
-2.对于待操作的Key，首先计算 hash 值，并确定此数据在环上的位置，从此位置沿环顺时针“行走”，遇到的第一个 master 节点就是 key 所在位置。<br>
-3.在此master上对Key进行操作</p>
+<p> 一致性 hash 算法将整个 hash 值空间组织成一个虚拟的圆环，整个空间按顺时针方向组织，</p>
+<ol>
+<li>将各个 master 节点（使用服务器的 ip 或主机名）进行 hash。这样就能确定每个节点在其哈希环上的位置</li>
+<li>对于待操作的Key，首先计算 hash 值，并确定此数据在环上的位置，从此位置沿环顺时针“行走”，遇到的第一个 master 节点就是 key 所在位置。</li>
+<li>在此master上对key进行操作</li>
+</ol>
 <figure data-type="image" tabindex="3"><img src="https://raw.githubusercontent.com/sunskybrave/picbed/master/5.png" alt="" loading="lazy"></figure>
-<p>对于增减master的影响分析：<br>
-在一致性哈希算法中，如果一个节点挂了，受影响的数据仅仅是此节点到环空间前一个节点（沿着逆时针方向行走遇到的第一个节点）之间的数据，其它不受影响。增加一个节点也同理。<br>
-缺点一致性哈希算法在节点太少时，容易因为节点分布不均匀而造成缓存热点的问题。</p>
+<p> 对于增减master的影响分析：<br>
+ 在一致性哈希算法中，如果一个节点挂了，受影响的数据仅仅是此节点到环空间前一个节点（沿着逆时针方向行走遇到的第一个节点）之间的数据，其它不受影响。增加一个节点也同理。<br>
+ 缺点一致性哈希算法在节点太少时，容易因为节点分布不均匀而造成缓存热点的问题。</p>
 <figure data-type="image" tabindex="4"><img src="https://raw.githubusercontent.com/sunskybrave/picbed/master/7.png" alt="" loading="lazy"></figure>
-<p>缓存热点的问题：<br>
-因为master的覆盖范围具有随机性，可能集中在某个hash区间内的值特别多，那么会有大量的数据都涌入同一个master，造成master的热点问题。<br>
-为了解决这种热点问题，一致性 hash 算法引入了虚拟节点机制，即对每一个节点计算多个 hash，每个计算结果位置都放置一个虚拟节点。这样就实现了数据的均匀分布，负载均衡。</p>
+<p> 缓存热点的问题：<br>
+ 因为master的覆盖范围具有随机性，可能集中在某个hash区间内的值特别多，那么会有大量的数据都涌入同一个master，造成master的热点问题。<br>
+ 为了解决这种热点问题，一致性 hash 算法引入了虚拟节点机制，即对每一个节点计算多个 hash，每个计算结果位置都放置一个虚拟节点。这样就实现了数据的均匀分布，负载均衡。</p>
 <figure data-type="image" tabindex="5"><img src="https://raw.githubusercontent.com/sunskybrave/picbed/master/8.png" alt="" loading="lazy"></figure>
-<p>一致性hash算法的特点：<br>
-均衡性：指哈希的结果能够尽可能分布到所有的节点中去，这样可以有效的利用每个节点上的资源。<br>
-单调性：当节点数量变化时哈希的结果应尽可能的保护已分配的内容不会被重新分派到新的节点。<br>
-分散性：一致性哈希算法应尽可能的避免key的哈希值重复<br>
-缺点：<br>
-1.难以改变key所属的master，因为key所属的master是由自身的hash计算结果决定的<br>
-2.只解决了key的均匀分布问题，但是Key的均匀并不代表流量的均匀，实际master的负载并不均衡</p>
+<p> 一致性hash算法的特点：<br>
+ 均衡性：指哈希的结果能够尽可能分布到所有的节点中去，这样可以有效的利用每个节点上的资源。<br>
+ 单调性：当节点数量变化时哈希的结果应尽可能的保护已分配的内容不会被重新分派到新的节点。<br>
+ 分散性：一致性哈希算法应尽可能的避免key的哈希值重复<br>
+ 缺点：</p>
+<ol>
+<li>难以改变key所属的master，因为key所属的master是由自身的hash计算结果决定的</li>
+<li>只解决了key的均匀分布问题，但是Key的均匀并不代表流量的均匀，实际master的负载并不均衡</li>
+</ol>
 <p><span id="t2.3"></span></p>
-<h2 id="hash-slot算法">hash slot算法</h2>
-<p>hash slot算法的特点：<br>
-1.有固定的16384个hash slot，每个master持有一部分的slot<br>
-2.对每个key计算CRC16值，然后对16384取模，可以获取key对应的hash slot，之后去对应的master节点上进行操作<br>
-与一致性hash算法相比可以方便地改变每个master所持有的slot，增加一个master，就将其他master的hash slot移动部分过去，减少一个master，就将它的hash slot移动到其他master上去</p>
-<p>读写操作：<br>
-1.client向redis cluster中的任意一个节点发送与数据库key有关的命令<br>
-2.接收命令的节点会计算出要处理的key属于哪个hash slot<br>
-3.检查这个hash slot是否属于自己（管辖）：<br>
-如果key所在的槽正好属于自己（管辖），节点会直接执行这个key相关命令；<br>
-如果key所在的槽不属于自己（管辖），那么节点会给client返回一个MOVED错误，指引client转向负责对应槽的节点，客户端需要再次发送想要执行的与key相关的命令</p>
-<p>节点之间的通信机制</p>
-<p>redis cluster节点间采取gossip协议进行通信<br>
-集中式：<br>
-优点：元数据的更新和读取的时效性非常好，一旦元数据出现了变更，立即就更新到集中式的存储中，其他节点读取的时候立即就可以感知到<br>
-缺点：所有的元数据的更新压力全部集中在一个地方，可能会导致元数据的存储有压力<br>
-gossip：<br>
-优点：元数据的更新比较分散，不是集中在一个地方，更新请求会陆陆续续，打到所有节点上去更新，有一定的延时，降低了压力;<br>
-缺点，元数据更新有延时，可能导致集群的一些操作会有一些滞后（例如查找操作）</p>
-<p>redisCluster的重定向特性</p>
-<p>客户端会挑选任意一个redis实例去发送命令，redis实例接收到命令，都会计算key对应的hash slot，如果在本地就在本地处理，否则返回moved给客户端，让客户端进行重定向<br>
-缺点：基于重定向的客户端，很消耗网络IO，因为大部分情况下，可能都会出现一次请求重定向，才能找到正确的节点<br>
+<h2 id="hash-slot算法">🍐hash slot算法</h2>
+<p> hash slot算法的特点：</p>
+<ol>
+<li>有固定的16384个hash slot，每个master持有一部分的slot</li>
+<li>对每个key计算CRC16值，然后对16384取模，可以获取key对应的hash slot，之后去对应的master节点上进行操作<br>
+ 与一致性hash算法相比可以方便地改变每个master所持有的slot，增加一个master，就将其他master的hash slot移动部分过去，减少一个master，就将它的hash slot移动到其他master上去</li>
+</ol>
+<p><span id="t3"></span></p>
+<h1 id="redis集群的工作原理">🎱redis集群的工作原理</h1>
+<p><span id="t3.1"></span></p>
+<h2 id="️读写操作">✏️读写操作</h2>
+<ol>
+<li>client向redis cluster中的任意一个节点发送与数据库key有关的命令</li>
+<li>接收命令的节点会计算出要处理的key属于哪个hash slot</li>
+<li>检查这个hash slot是否属于自己（管辖）：<br>
+ 如果key所在的槽正好属于自己（管辖），节点会直接执行这个key相关命令；<br>
+ 如果key所在的槽不属于自己（管辖），那么节点会给client返回一个MOVED错误，指引client转向负责对应槽的节点，客户端需要再次发送想要执行的与key相关的命令</li>
+</ol>
+<p><span id="t3.2"></span></p>
+<h2 id="️节点之间的通信机制">✉️节点之间的通信机制</h2>
+<p> redis cluster节点间采取gossip协议进行通信<br>
+ 集中式：<br>
+ 优点：元数据的更新和读取的时效性非常好，一旦元数据出现了变更，立即就更新到集中式的存储中，其他节点读取的时候立即就可以感知到<br>
+ 缺点：所有的元数据的更新压力全部集中在一个地方，可能会导致元数据的存储有压力<br>
+ gossip：<br>
+ 优点：元数据的更新比较分散，不是集中在一个地方，更新请求会陆陆续续，打到所有节点上去更新，有一定的延时，降低了压力;<br>
+ 缺点，元数据更新有延时，可能导致集群的一些操作会有一些滞后（例如查找操作）</p>
+<p><span id="t3.3"></span></p>
+<h2 id="rediscluster的重定向特性">🎡redisCluster的重定向特性</h2>
+<p> 客户端会挑选任意一个redis实例去发送命令，redis实例接收到命令，都会计算key对应的hash slot，如果在本地就在本地处理，否则返回moved给客户端，让客户端进行重定向<br>
+ 缺点：基于重定向的客户端，很消耗网络IO，因为大部分情况下，可能都会出现一次请求重定向，才能找到正确的节点<br>
 JedisCluster中的解决方案：<br>
 本地维护一份hashslot -&gt; node的映射表，大部分情况下，直接走本地缓存就可以找到hashslot 所对应的 node，不需要通过节点进行moved重定向</p>
-<p>JedisCluster的工作原理</p>
-<p>1.在JedisCluster初始化的时候，就会随机选择一个node，初始化hashslot -&gt; node映射表，同时为每个节点创建一个JedisPool连接池<br>
-2.每次基于JedisCluster执行操作，首先JedisCluster都会在本地计算key的hashslot，然后在本地映射表找到对应的节点<br>
-3.如果那个node正好还是持有那个hashslot，那么就ok; 如果说进行了reshard这样的操作，可能hashslot已经不在那个node上了，就会返回moved<br>
-4.如果JedisCluter API发现对应的节点返回moved，那么利用该节点的元数据，更新本地的hashslot -&gt; node映射表缓存<br>
-重复上面几个步骤，直到找到对应的节点，如果重试超过5次，那么就报错，JedisClusterMaxRedirectionException</p>
-<p>1.获取每个节点所对应的slot范围<br>
-2.对于每个key计算CRC16值，然后对16384取模，得到每个key的slot值<br>
-3.确定每个节点上有哪些key<br>
-4.在每个节点上使用管道命令，进行批量操作</p>
-<p>当前缺点：<br>
-如果批量操作的过程中节点存在增减则会触发异常，需要在批量操作中考虑到如何解决这个问题，需要后续改进。</p>
+<p><span id="t3.4"></span></p>
+<h2 id="jediscluster的工作原理">🎸JedisCluster的工作原理</h2>
+<ol>
+<li>在JedisCluster初始化的时候，就会随机选择一个node，初始化hashslot -&gt; node映射表，同时为每个节点创建一个JedisPool连接池</li>
+<li>每次基于JedisCluster执行操作，首先JedisCluster都会在本地计算key的hashslot，然后在本地映射表找到对应的节点</li>
+<li>如果那个node正好还是持有那个hashslot，那么就ok; 如果说进行了reshard这样的操作，可能hashslot已经不在那个node上了，就会返回moved</li>
+<li>如果JedisCluter API发现对应的节点返回moved，那么利用该节点的元数据，更新本地的hashslot -&gt; node映射表缓存<br>
+ 重复上面几个步骤，直到找到对应的节点，如果重试超过5次，那么就报错，JedisClusterMaxRedirectionException</li>
+</ol>
+<p><span id="t4"></span></p>
+<h2 id="redis集群下的批量读写方法">🏓redis集群下的批量读写方法</h2>
+<ol>
+<li>获取每个节点所对应的slot范围</li>
+<li>对于每个key计算CRC16值，然后对16384取模，得到每个key的slot值</li>
+<li>确定每个节点上有哪些key</li>
+<li>在每个节点上使用管道命令，进行批量操作</li>
+</ol>
+<p> 当前缺点：<br>
+ 如果批量操作的过程中节点存在增减则会触发异常，需要在批量操作中考虑到如何解决这个问题，需要后续改进。</p>
 ]]></content>
     </entry>
     <entry>
