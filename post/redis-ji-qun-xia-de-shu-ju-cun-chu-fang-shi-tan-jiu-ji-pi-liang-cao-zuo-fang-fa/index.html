@@ -2,23 +2,25 @@
   <head>
     <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Redis集群下的数据存储方式探究及批量操作方法 | Gridea</title>
-<link rel="shortcut icon" href="https://sunskybrave.github.io/favicon.ico?v=1595130583896">
+<title>Redis集群下数据存储及批量操作方法探究 | Gridea</title>
+<link rel="shortcut icon" href="https://sunskybrave.github.io/favicon.ico?v=1595254587565">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
 <link rel="stylesheet" href="https://sunskybrave.github.io/styles/main.css">
-<link rel="alternate" type="application/atom+xml" title="Redis集群下的数据存储方式探究及批量操作方法 | Gridea - Atom Feed" href="https://sunskybrave.github.io/atom.xml">
+<link rel="alternate" type="application/atom+xml" title="Redis集群下数据存储及批量操作方法探究 | Gridea - Atom Feed" href="https://sunskybrave.github.io/atom.xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
 
 
 
     <meta name="description" content="
-redis集群下的批量操作方法研究
-1.redis集群的简要介绍
-2.redis集群的工作原理
-3.redis集群的故障处理
-4.redis集群下的批量读写方法
-redis集群的简要介绍
-Redis-Cluster采用无中心结构,它的特点..." />
+目录
+1. redis集群的简要介绍
+2. redis集群寻址算法
++ hash算法
++ 一致性hash算法
++ hash slot算法
+2. redis集群的工作原理
+3. redis集群的故障处理
+4. redis集群下的批量读写方法..." />
     <meta name="keywords" content="" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
     <script src="https://cdn.bootcss.com/highlight.js/9.12.0/highlight.min.js"></script>
@@ -28,7 +30,7 @@ Redis-Cluster采用无中心结构,它的特点..." />
       <div class="main-content">
         <div class="site-header">
   <a href="https://sunskybrave.github.io">
-  <img class="avatar" src="https://sunskybrave.github.io/images/avatar.png?v=1595130583896" alt="">
+  <img class="avatar" src="https://sunskybrave.github.io/images/avatar.png?v=1595254587565" alt="">
   </a>
   <h1 class="site-title">
     Gridea
@@ -81,7 +83,7 @@ Redis-Cluster采用无中心结构,它的特点..." />
         <div class="post-detail">
           <article class="post">
             <h2 class="post-title">
-              Redis集群下的数据存储方式探究及批量操作方法
+              Redis集群下数据存储及批量操作方法探究
             </h2>
             <div class="post-info">
               <span>
@@ -96,30 +98,44 @@ Redis-Cluster采用无中心结构,它的特点..." />
             <div class="post-content-wrapper">
               <div class="post-content">
                 <figure data-type="image" tabindex="1"><img src="https://raw.githubusercontent.com/sunskybrave/picbed/master/4.jpg" alt="" loading="lazy"></figure>
-<p>redis集群下的批量操作方法研究</p>
-<p>1.redis集群的简要介绍<br>
-2.redis集群的工作原理<br>
-3.redis集群的故障处理<br>
-4.redis集群下的批量读写方法</p>
-<p>redis集群的简要介绍</p>
-<p>Redis-Cluster采用无中心结构,它的特点如下：<br>
-1.所有的redis节点彼此互联，内部使用gossip 协议优化传输速度和带宽。<br>
-2.节点的fail是通过集群中超过半数的节点检测失效时才生效。<br>
-3.客户端与redis节点直连,不需要中间代理层.客户端不需要连接集群所有节点,连接集群中任何一个可用节点即可</p>
-<p>redis集群下的分布式寻址算法</p>
-<p>在redis集群采用分布式存储的思想，将数据分布在多个master节点下，这就涉及到数据如何进行分布寻址，有以下3种寻址算法：<br>
-1.hash算法<br>
-2.一致性hash算法<br>
-3.hash slot算法</p>
-<p>hash算法</p>
+<h1 id="目录">目录</h1>
+<p><a href="#t1">1. redis集群的简要介绍</a><br>
+<a href="#t2">2. redis集群寻址算法</a><br>
++ <a href="#t2.1">hash算法</a><br>
++ <a href="#t2.2">一致性hash算法</a><br>
++ <a href="#t2.3">hash slot算法</a><br>
+<a href="#t2">2. redis集群的工作原理</a><br>
+<a href="#t3">3. redis集群的故障处理</a><br>
+<a href="#t4">4. redis集群下的批量读写方法</a></p>
+<p><span id="t1"></span></p>
+<h1 id="redis集群的简要介绍">redis集群的简要介绍</h1>
+<p>Redis-Cluster采用无中心结构,它的特点如下：</p>
+<ol>
+<li>所有的redis节点彼此互联，内部使用gossip 协议优化传输速度和带宽。</li>
+<li>节点的fail是通过集群中超过半数的节点检测失效时才生效。</li>
+<li>客户端与redis节点直连,不需要中间代理层.客户端不需要连接集群所有节点,连接集群中任何一个可用节点即可</li>
+</ol>
+<p><span id="t2"></span></p>
+<h1 id="redis集群寻址算法">redis集群寻址算法</h1>
+<p>在redis集群采用分布式存储的思想，将数据分布在多个master节点下，这就涉及到数据如何进行分布寻址，有以下3种寻址算法：</p>
+<ol>
+<li>hash算法</li>
+<li>一致性hash算法</li>
+<li>hash slot算法</li>
+</ol>
+<p><span id="t2.1"></span></p>
+<h2 id="hash算法">hash算法</h2>
 <p>假设当前共有N 个 master，采用下面的通用方法计算 key的 hash 值，然后均匀的映射到 N 个 master上：<br>
-　　hash(key)%N<br>
-1.增加一个master<br>
-公式变成了 hash(key)%(N+1)<br>
-2.如果一个master宕机了<br>
+　　hash(key)%N</p>
+<ol>
+<li>增加一个master<br>
+公式变成了 hash(key)%(N+1)</li>
+<li>如果一个master宕机了<br>
 公式变成了 hash(key)%(N-1)<br>
-在这两种情况下，大量的缓存都失效了，数据库访问的压力陡增，严重情况，还可能导致数据库宕机。</p>
-<p>一致性hash算法</p>
+在这两种情况下，大量的缓存都失效了，数据库访问的压力陡增，严重情况，还可能导致数据库宕机。</li>
+</ol>
+<p><span id="t2.2"></span></p>
+<h2 id="一致性hash算法">一致性hash算法</h2>
 <figure data-type="image" tabindex="2"><img src="https://raw.githubusercontent.com/sunskybrave/picbed/master/6.png" alt="" loading="lazy"></figure>
 <p>一致性 hash 算法将整个 hash 值空间组织成一个虚拟的圆环，整个空间按顺时针方向组织，<br>
 1.将各个 master 节点（使用服务器的 ip 或主机名）进行 hash。这样就能确定每个节点在其哈希环上的位置<br>
@@ -141,7 +157,8 @@ Redis-Cluster采用无中心结构,它的特点..." />
 缺点：<br>
 1.难以改变key所属的master，因为key所属的master是由自身的hash计算结果决定的<br>
 2.只解决了key的均匀分布问题，但是Key的均匀并不代表流量的均匀，实际master的负载并不均衡</p>
-<p>hash slot算法</p>
+<p><span id="t2.3"></span></p>
+<h2 id="hash-slot算法">hash slot算法</h2>
 <p>hash slot算法的特点：<br>
 1.有固定的16384个hash slot，每个master持有一部分的slot<br>
 2.对每个key计算CRC16值，然后对16384取模，可以获取key对应的hash slot，之后去对应的master节点上进行操作<br>
@@ -180,7 +197,18 @@ JedisCluster中的解决方案：<br>
 
               </div>
               <div class="toc-container">
-                
+                <ul class="markdownIt-TOC">
+<li><a href="#%E7%9B%AE%E5%BD%95">目录</a></li>
+<li><a href="#redis%E9%9B%86%E7%BE%A4%E7%9A%84%E7%AE%80%E8%A6%81%E4%BB%8B%E7%BB%8D">redis集群的简要介绍</a></li>
+<li><a href="#redis%E9%9B%86%E7%BE%A4%E5%AF%BB%E5%9D%80%E7%AE%97%E6%B3%95">redis集群寻址算法</a>
+<ul>
+<li><a href="#hash%E7%AE%97%E6%B3%95">hash算法</a></li>
+<li><a href="#%E4%B8%80%E8%87%B4%E6%80%A7hash%E7%AE%97%E6%B3%95">一致性hash算法</a></li>
+<li><a href="#hash-slot%E7%AE%97%E6%B3%95">hash slot算法</a></li>
+</ul>
+</li>
+</ul>
+
               </div>
             </div>
           </article>
